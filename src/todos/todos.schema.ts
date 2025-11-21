@@ -3,7 +3,7 @@ import { Document } from "mongoose"
 
 @Schema()
 export class Todo extends Document {
-    @Prop()
+    @Prop({ required: true})
     title: string;
 
     @Prop()
