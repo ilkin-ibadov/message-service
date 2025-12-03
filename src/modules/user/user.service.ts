@@ -9,7 +9,7 @@ import * as bcrypt from 'bcrypt'
 import { MailService } from '../mail/mail.service';
 import { KafkaService } from '../kafka/kafka.service';
 import { MongoService } from '../mongo/mongo.service';
-import { randomBytes, verify } from "crypto"
+import { randomBytes } from "crypto"
 import { addSeconds } from "date-fns"
 
 @Injectable()
@@ -62,7 +62,7 @@ export class UserService {
 
         const verifyUrl = `${process.env.APP_URL}/api/auth/verify-email?token=${token}`
         const html = `<p>Verify your email by clicking <a href="${verifyUrl}">here</a>. Link expires in 24 hours.</p>`
-        await this.mailService.sendEmail(user.email, 'Verify your email', html)
+        await this.mailService.sendMail(user.email, 'Verify your email', html)
         await this.mongoService.log('info', 'Verification created', { userId: user.id })
         return { ev, token }
     }
@@ -98,7 +98,7 @@ export class UserService {
 
         const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`
         const html = `<p>Reset your password by clicking <a href="${resetUrl}">here</a>. Link expires in 1 hour.</p>`
-        await this.mailService.sendEmail(user.email, 'Reset your password', html)
+        await this.mailService.sendMail(user.email, 'Reset your password', html)
         await this.mongoService.log('info', 'Password reset requested', { userId: user.id })
         return { pr, token }
     }

@@ -1,6 +1,6 @@
 import { DataSourceOptions } from "typeorm";
 import { User } from "./modules/user/user.entity"
-import { EmailVerification } from "./modules/user/email-verification.entity.ts"
+import { EmailVerification } from "./modules/user/email-verification.entity"
 import { PasswordReset } from "./modules/user/password-reset.entity"
 import { UserSession } from "./modules/user/session.entity"
 

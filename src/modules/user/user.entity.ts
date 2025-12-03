@@ -1,16 +1,13 @@
+import { CommonEntity } from 'src/common/entities/common.entity';
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
-  CreateDateColumn,
-  UpdateDateColumn,
   Unique,
 } from 'typeorm';
 
 @Entity({ name: 'users' })
 @Unique(['email'])
-export class User {
-  @PrimaryGeneratedColumn('uuid') id: string;
+export class User extends CommonEntity {
 
   @Column() email: string;
 
@@ -21,8 +18,4 @@ export class User {
   @Column({ default: false }) isVerified: boolean;
 
   @Column({ default: false }) isPrivate: boolean;
-
-  @CreateDateColumn() createdAt: Date;
-
-  @UpdateDateColumn() updatedAt: Date;
 }

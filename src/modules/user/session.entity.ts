@@ -1,17 +1,15 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
-  CreateDateColumn,
   ManyToOne,
   JoinColumn,
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
+import { CommonEntity } from 'src/common/entities/common.entity';
 
 @Entity({ name: 'user_sessions' })
-export class UserSession {
-  @PrimaryGeneratedColumn('uuid') id: string;
+export class UserSession extends CommonEntity {
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
@@ -26,7 +24,6 @@ export class UserSession {
   @Column({ nullable: true }) device?: string;
   @Column({ nullable: true }) country?: string;
 
-  @Column({ type: 'timestamptz' }) createdAt: Date;
   @Column({ type: 'timestamptz', nullable: true }) expiresAt?: Date;
   @Column({ type: 'timestamptz', nullable: true }) revokedAt?: Date;
 

@@ -1,38 +1,17 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { PassportStrategy } from "@nestjs/passport";
-import { ExtractJwt, Strategy } from "passport-jwt";
-import { UsersService } from "src/users/users.service";
-
-interface AccessJwtPayload {
-    id: string;
-    role: string;
-    email: string;
-    iat?: number;
-    exp?: number;
-}
+import { Injectable } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
 
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-    constructor(private usersService: UsersService) {
+export class JwtStrategy extends PassportStrategy(Strategy) {
+    constructor() {
         super({
-            secretOrKey: process.env.JWT_SECRET as string,
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken()
-        })
+            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            secretOrKey: process.env.JWT_ACCESS_TOKEN_SECRET!,
+        });
     }
 
-    // Checks if user for given tokens is deleted
-    async validate(payload: AccessJwtPayload) {
-        const user = await this.usersService.findById(payload.id)
-
-        if (!user) {
-            throw new UnauthorizedException("User no longer exists")
-        }
-
-        return {
-            id: user._id.toString(),
-            email: user.email,
-            role: user.role
-        }
+    async validate(payload: any) {
+        return { userId: payload.sub, email: payload.email };
     }
-
 }
