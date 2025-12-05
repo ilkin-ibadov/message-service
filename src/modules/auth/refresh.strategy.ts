@@ -1,12 +1,12 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
-import { UsersService } from "src/users/users.service";
+import { UserService } from "../user/user.service";
 import { Request } from "express";
 
 @Injectable()
 export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
-    constructor(private usersService: UsersService) {
+    constructor(private usersService: UserService) {
         super({
             secretOrKey: process.env.JWT_REFRESH_SECRET as string,
             jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
@@ -22,7 +22,7 @@ export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refres
             throw new UnauthorizedException("Refresh token is missing")
         }
 
-        const user = await this.usersService.findById(payload.id)
+        const user: any = await this.usersService.findById(payload.id)
 
         if (!user || !user.refreshToken) {
             throw new UnauthorizedException("Invalid refresh token")

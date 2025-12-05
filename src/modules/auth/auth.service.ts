@@ -59,10 +59,10 @@ export class AuthService {
 
     // Optionally also store refresh token => sessionId mapping in redis for fast lookup
     const redisKey = `refresh:session:${session.id}`;
-    const ttlSeconds = this.parseExpiration(process.env.JWT_REFRESH_TOKEN_EXPIRATION || '7d');
+    const ttlSeconds = this.parseExpiration(process.env.JWT_REFRESH_TOKEN_EXPIRATION!);
     await this.redisClient.set(redisKey, session.id, 'EX', ttlSeconds);
 
-    return { accessToken, refreshToken, sessionId: session.id, expiresIn: process.env.JWT_ACCESS_TOKEN_EXPIRATION || '15m' };
+    return { accessToken, refreshToken, sessionId: session.id, expiresIn: process.env.JWT_ACCESS_TOKEN_EXPIRATION!};
   }
 
   // Rotate refresh tokens: find session by matching provided refresh token
@@ -88,7 +88,7 @@ export class AuthService {
 
     // cleanup older redis mapping if exists
     await this.redisClient.del(`refresh:session:${session.id}`);
-    const ttlSeconds = this.parseExpiration(process.env.JWT_REFRESH_TOKEN_EXPIRATION || '7d');
+    const ttlSeconds = this.parseExpiration(process.env.JWT_REFRESH_TOKEN_EXPIRATION!);
     await this.redisClient.set(`refresh:session:${newSession.id}`, newSession.id, 'EX', ttlSeconds);
 
     return { accessToken, refreshToken: newRefresh, sessionId: newSession.id };
