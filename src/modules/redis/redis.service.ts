@@ -3,7 +3,7 @@ import Redis from 'ioredis';
 
 @Injectable()
 export class RedisService {
-    constructor(@Inject('REDIS') private readonly redis: Redis) { }
+    constructor(@Inject('REDIS') private readonly redis: Redis) {}
 
     async get(key: string) {
         const data = await this.redis.get(key);
@@ -26,5 +26,17 @@ export class RedisService {
     async rpop(key: string) {
         const val = await this.redis.rpop(key);
         return val ? JSON.parse(val) : null;
+    }
+
+    async incr(key: string) {
+        return this.redis.incr(key);
+    }
+
+    async decr(key: string) {
+        return this.redis.decr(key);
+    }
+
+    async del(key: string) {
+        return this.redis.del(key);
     }
 }

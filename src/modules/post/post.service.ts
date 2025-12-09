@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Post } from './post.entity';
+import { PostLike } from './like.entity';
+import { PostReply } from './reply.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -15,6 +17,8 @@ export class PostService {
   constructor(
     @InjectRepository(Post)
     private readonly postRepo: Repository<Post>,
+    private readonly likeRepo: Repository<PostLike>,
+    private readonly replyRepo: Repository<PostReply>,
     private readonly kafka: KafkaProducerService,
     private readonly mongoService: MongoService,
     private readonly redisService: RedisService,
@@ -152,4 +156,70 @@ export class PostService {
 
     return { deleted: true };
   }
+
+  async likePost(postId: string, userId: string) {
+    const exists = await this.likeRepo.findOne({ where: { postId, userId } });
+    if (exists) throw new BadRequestException('Already liked');
+
+    const like = this.likeRepo.create({ postId, userId });
+    await this.likeRepo.save(like);
+
+    await this.redisService.incr(`post:${postId}:likes`);
+
+    await this.kafka.produce('post.liked', { postId, userId });
+
+    return { liked: true };
+  }
+
+  async unlikePost(postId: string, userId: string) {
+    await this.likeRepo.delete({ postId, userId });
+    await this.redisService.decr(`post:${postId}:likes`);
+
+    await this.kafka.produce('post.unliked', { postId, userId });
+
+    return { unliked: true };
+  }
+
+  async reply(postId: string, userId: string, dto: CreatePostDto) {
+    const usernames = extractMentions(dto.content);
+
+    let mentionUserIds: string[] = [];
+    if (usernames.length > 0) {
+      const res = await axios.get(
+        `${process.env.AUTH_SERVICE_URL}/internal/users/resolve-mentions`,
+        { params: { usernames } }
+      );
+      mentionUserIds = res.data.userIds;
+    }
+
+    const reply = this.replyRepo.create({
+      postId,
+      userId,
+      content: dto.content,
+      mediaItems: dto.media || [],
+      mentions: mentionUserIds,
+    });
+
+    const saved = await this.replyRepo.save(reply);
+
+    await this.redisService.incr(`post:${postId}:replies`);
+
+    await this.kafka.produce('post.reply.created', {
+      postId,
+      replyId: saved.id,
+      userId
+    });
+
+    return saved;
+  }
+
+  async getReplies(postId: string) {
+    const replies = await this.replyRepo.find({
+      where: { postId },
+      order: { createdAt: 'ASC' },
+    });
+
+    return replies;
+  }
+
 }
