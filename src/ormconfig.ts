@@ -1,5 +1,6 @@
 import { DataSourceOptions } from "typeorm";
 import { Post } from "./modules/post/post.entity";
+import { UserReplica } from "./modules/user-replica/user-replica.entity";
 
 export const typeOrmConfig: DataSourceOptions = {
     type: "postgres",
@@ -8,7 +9,7 @@ export const typeOrmConfig: DataSourceOptions = {
     username: process.env.DB_USERNAME || "postgres",
     password: process.env.DB_PASSWORD || "postgres",
     database: process.env.DB_NAME || "posts-service",
-    entities: [Post],
+    entities: [Post, UserReplica],
     synchronize: true,
     logging: false,
 };
