@@ -1,76 +1,47 @@
 services:
   postgres:
     image: postgres:18
+    container_name: post-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_DB: posts
     ports:
       - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/18/main
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
-    ports:
-      - "6380:6379"
-    volumes:
-      - redisdata:/data
-    restart: unless-stopped
-
-  kafka:
-    image: confluentinc/cp-kafka:latest.arm64
-    environment:
-     KAFKA_NODE_ID: 1
-     KAFKA_PROCESS_ROLES: "broker,controller"
-     KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
-     KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
-     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-     KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
-     KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
-     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "9093:9092"
-
-  mongo:
-    image: mongo:6
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodata:/data/db
-    restart: unless-stopped
+      - post_pgdata:/var/lib/postgresql/data
+    networks:
+      - microservices
 
   posts:
     build: .
+    container_name: post-service
     env_file:
-      - ./.env
+      - .env
     environment:
-      - NODE_ENV=development
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_USER=postgres
-      - DATABASE_PASSWORD=postgres
-      - DATABASE_NAME=posts
-      - KAFKA_BROKERS=kafka:9092
-      - REDIS_HOST=redis
-      - MONGO_URI=mongodb://mongo:27017/posts
-      - AUTH_SERVICE_URL=http://auth:3000
+      NODE_ENV: development
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: posts
+      KAFKA_BROKERS: kafka:9092
+      REDIS_HOST: redis
+      MONGO_URI: mongodb://mongo:27017/posts
+      AUTH_SERVICE_URL: http://auth-service:3000
     ports:
       - "3001:3000"
     depends_on:
       - postgres
-      - redis
-      - kafka
-      - mongo
+    networks:
+      - microservices
     volumes:
       - ./:/usr/src/app
-    working_dir: /usr/src/app
     command: npm run start:dev
-    restart: unless-stopped
+
+networks:
+  microservices:
+    external: true
 
 volumes:
-  pgdata:
-  redisdata:
-  mongodata:
+  post_pgdata:

@@ -21,6 +21,7 @@ import {
   ApiBadRequestResponse,
   ApiOkResponse,
   ApiNotFoundResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Post as PostEntity } from './post.entity';
 import { PostLike } from './like.entity';
@@ -28,11 +29,12 @@ import { PostReply } from './reply.entity';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { JwtAuthGuard } from '../../middlewares/auth.guard';
 
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @ApiTags('Posts')
 @Controller('posts')
 export class PostController {
-  constructor(private readonly postService: PostService) {}
+  constructor(private readonly postService: PostService) { }
 
   @Post()
   @ApiOperation({ summary: 'Create a new post' })
@@ -43,7 +45,7 @@ export class PostController {
   })
   @ApiBadRequestResponse({ description: 'Validation failed.' })
   create(@Req() req, @Body() dto: CreatePostDto) {
-    return this.postService.create(req.user.id, dto);
+    return this.postService.create(req.user.sub, dto);
   }
 
   @Get(':id')
@@ -53,6 +55,8 @@ export class PostController {
   getById(@Param('id') id: string) {
     return this.postService.findById(id);
   }
+
+  //api/posts
 
   @Get()
   @ApiOperation({ summary: 'Get all posts with pagination' })
@@ -77,7 +81,7 @@ export class PostController {
   @ApiNotFoundResponse({ description: 'Post not found.' })
   @ApiBadRequestResponse({ description: 'Validation failed.' })
   update(@Param('id') id: string, @Req() req, @Body() dto: UpdatePostDto) {
-    return this.postService.update(id, req.user.id, dto);
+    return this.postService.update(id, req.user.sub, dto);
   }
 
   @Delete(':id')
@@ -85,16 +89,15 @@ export class PostController {
   @ApiOkResponse({ description: 'Post deleted successfully.' })
   @ApiNotFoundResponse({ description: 'Post not found.' })
   delete(@Param('id') id: string, @Req() req) {
-    return this.postService.delete(id, req.user.id);
+    return this.postService.delete(id, req.user.sub);
   }
-
 
   @Post(":id/like")
   @ApiOperation({ summary: 'Like a post' })
   @ApiOkResponse({ description: 'Post liked successfully', type: PostLike })
   @ApiNotFoundResponse({ description: 'Post not found' })
   likePost(@Param('id') id: string, @Req() req) {
-    return this.postService.likePost(id, req.user.id)
+    return this.postService.likePost(id, req.user.sub)
   }
 
   @Post(":id/unlike")
@@ -102,7 +105,7 @@ export class PostController {
   @ApiOkResponse({ description: 'Post unliked successfully', type: PostLike })
   @ApiNotFoundResponse({ description: 'Post not found' })
   unlikePost(@Param('id') id: string, @Req() req) {
-    return this.postService.unlikePost(id, req.user.id)
+    return this.postService.unlikePost(id, req.user.sub)
   }
 
   @Post(":id/reply")
@@ -111,7 +114,7 @@ export class PostController {
   @ApiNotFoundResponse({ description: 'Post not found' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   reply(@Param('id') id: string, @Req() req, @Body() dto: CreateReplyDto) {
-    return this.postService.reply(id, req.user.id, dto)
+    return this.postService.reply(id, req.user.sub, dto)
   }
 
   @Get(':id/replies')

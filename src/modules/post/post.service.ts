@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Post } from './post.entity';
 import { PostLike } from './like.entity';
@@ -84,15 +84,19 @@ export class PostService {
     const skip = (page - 1) * limit;
 
     // Try caching the feed page
-    const cacheKey = `posts:page:${page}:limit:${limit}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached;
+    // const cacheKey = `posts:page:${page}:limit:${limit}`;
+    // const cached = await this.redisService.get(cacheKey);
+    // if (cached) return cached;
+
+    const allPosts = await this.postRepo.find()
 
     const [posts, total] = await this.postRepo.findAndCount({
       skip,
       take: limit,
       order: { createdAt: 'DESC' },
     });
+
+    // console.log(posts)
 
     const result = {
       data: posts,
@@ -103,8 +107,8 @@ export class PostService {
       },
     };
 
-    await this.redisService.set(cacheKey, result, 300); // cache feed for 5 min
-    return result;
+    // await this.redisService.set(cacheKey, result, 300); // cache feed for 5 min
+    return { data: allPosts };
   }
 
   async update(id: string, userId: string, dto: UpdatePostDto) {
@@ -129,7 +133,7 @@ export class PostService {
 
   async delete(postId: string, userId: string) {
     const post = await this.postRepo.findOne({ where: { id: postId } });
-    if (!post) throw new BadRequestException('Post not found');
+    if (!post) throw new NotFoundException('Post not found');
     if (post.userId !== userId) throw new BadRequestException('Unauthorized');
 
     await this.postRepo.softDelete(postId);
