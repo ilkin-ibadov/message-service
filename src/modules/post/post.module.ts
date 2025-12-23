@@ -7,8 +7,6 @@ import { UserReplica } from '../user-replica/user-replica.entity';
 import { PostService } from './post.service';
 import { PostController } from './post.controller';
 import { KafkaService } from '../kafka/kafka.service'
-import { UserReplicaService } from '../user-replica/user-replica.service';
-import { UserReplicaConsumer } from '../kafka/consumers/user-replica.consumer';
 import { RedisService } from '../redis/redis.service';
 import { MongoService } from '../mongo/mongo.service';
 import { IdempotencyModule } from '../kafka/idempotency/idempotency.module';
@@ -20,8 +18,6 @@ import { UserReplicaModule } from '../user-replica/user-replica.module';
   providers: [
     PostService,
     KafkaService,
-    // UserReplicaService,
-    // UserReplicaConsumer,
     RedisService,
     MongoService
   ],

@@ -14,7 +14,7 @@ export class UserReplicaConsumer implements OnModuleInit {
   async onModuleInit() {
     this.kafkaService.registerHandler(
       'auth.user.created',
-      this.userReplicaService.onUserCreated.bind(this),
+      (event) => this.userReplicaService.onUserCreated(event.payload),
     );
 
     await this.kafkaService.startConsumer();

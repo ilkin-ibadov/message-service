@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, IsNull } from 'typeorm';
 import { Post } from './post.entity';
 import { PostLike } from './like.entity';
 import { PostReply } from './reply.entity';
@@ -32,6 +32,19 @@ export class PostService {
     private readonly dataSource: DataSource, // needed for transactions
   ) { }
 
+  private async hydratePostCounters(post: Post) {
+    const [likeCount, replyCount] = await Promise.all([
+      this.redisService.get(`post:${post.id}:likeCount`),
+      this.redisService.get(`post:${post.id}:replyCount`),
+    ]);
+
+    return {
+      ...post,
+      likeCount: likeCount !== null ? Number(likeCount) : post.likeCount,
+      replyCount: replyCount !== null ? Number(replyCount) : post.replyCount,
+    };
+  }
+
   async resolveMentionsLocally(usernames: string[]) {
     const users = await this.userReplicaService.findManyByUsername(usernames);
     return users.map((user) => user.id);
@@ -39,7 +52,8 @@ export class PostService {
 
   async create(userId: string, dto: CreatePostDto) {
     const usernames = extractMentions(dto.content);
-    const mentionUserIds = await this.userReplicaService.resolveMentionsLocally(usernames);
+    const mentionUserIds =
+      await this.userReplicaService.resolveMentionsLocally(usernames);
 
     const post = this.postRepo.create({
       userId,
@@ -47,9 +61,25 @@ export class PostService {
       mediaItems: dto.media || [],
       mentions: mentionUserIds,
     });
+
     const saved = await this.postRepo.save(post);
 
-    await this.redisService.set(`post:${saved.id}`, saved, 3600);
+    // Cache full post (NO counters)
+    await this.redisService.set(
+      `post:${saved.id}`,
+      {
+        ...saved,
+        likeCount: undefined,
+        replyCount: undefined,
+      },
+      3600,
+    );
+
+    // Initialize counters in Redis
+    await Promise.all([
+      this.redisService.set(`post:${saved.id}:likeCount`, saved.likeCount ?? 0),
+      this.redisService.set(`post:${saved.id}:replyCount`, saved.replyCount ?? 0),
+    ]);
 
     await this.kafka.produce('post.created', {
       postId: saved.id,
@@ -73,38 +103,36 @@ export class PostService {
   }
 
   async findById(id: string) {
-    const cached = await this.redisService.get(`post:${id}`);
-    if (cached) return cached;
+    let post = await this.redisService.get(`post:${id}`);
 
-    const post = await this.postRepo.findOne({ where: { id } });
-    if (post) await this.redisService.set(`post:${id}`, post, 3600);
-    return post;
+    if (!post) {
+      post = await this.postRepo.findOne({ where: { id } });
+      if (!post) return null;
+
+      await this.redisService.set(`post:${id}`, post, 3600);
+    }
+
+    return this.hydratePostCounters(post);
   }
 
   async findAll(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
 
-    // Fetch posts from DB
     const [posts, total] = await this.postRepo.findAndCount({
       skip,
       take: limit,
       order: { createdAt: 'DESC' },
     });
 
-    // Preload likeCount and replyCount from Redis
-    const postsWithCounts = await Promise.all(posts.map(async (post) => {
-      const likeCount = await this.redisService.get(`post:${post.id}:likeCount`);
-      const replyCount = await this.redisService.get(`post:${post.id}:replyCount`);
-
-      return {
-        ...post,
-        likeCount: likeCount !== null ? Number(likeCount) : post.likeCount,
-        replyCount: replyCount !== null ? Number(replyCount) : post.replyCount,
-      };
-    }));
+    const hydrated = await Promise.all(
+      posts.map(async (post) => {
+        await this.redisService.set(`post:${post.id}`, post, 3600);
+        return this.hydratePostCounters(post);
+      }),
+    );
 
     return {
-      data: postsWithCounts,
+      data: hydrated,
       meta: {
         total,
         page,
@@ -113,17 +141,31 @@ export class PostService {
     };
   }
 
-
   async update(id: string, userId: string, dto: UpdatePostDto) {
-    const post = await this.findById(id);
+    const post = await this.postRepo.findOne({ where: { id } });
     if (!post) throw new NotFoundException('Post not found');
-    if (post.userId !== userId) throw new ForbiddenException('Cannot edit others post');
+    if (post.userId !== userId)
+      throw new ForbiddenException('Cannot edit others post');
 
     Object.assign(post, dto);
     const updated = await this.postRepo.save(post);
 
-    await this.redisService.set(`post:${id}`, updated, 3600);
-    await this.mongoService.log('info', 'Post updated', { postId: updated.id, userId });
+    // Update cached post (NO counters)
+    await this.redisService.set(
+      `post:${id}`,
+      {
+        ...updated,
+        likeCount: undefined,
+        replyCount: undefined,
+      },
+      3600,
+    );
+
+    await this.mongoService.log('info', 'Post updated', {
+      postId: updated.id,
+      userId,
+    });
+
     return updated;
   }
 
@@ -181,7 +223,19 @@ export class PostService {
     const exists = await this.postRepo.exists({ where: { id: postId } });
     if (!exists) throw new NotFoundException('Post not found');
 
-    return this.likeRepo.find({ where: { postId }, order: { createdAt: 'ASC' } });
+    return this.likeRepo
+      .createQueryBuilder('like')
+      .innerJoin('like.user', 'user')
+      .where('like.postId = :postId', { postId })
+      .select([
+        'like.id',
+        'like.userId',
+        'like.createdAt',
+        'user.id',
+        'user.username',
+      ])
+      .orderBy('like.createdAt', 'ASC')
+      .getMany();
   }
 
   async reply(postId: string, userId: string, dto: CreateReplyDto) {
@@ -204,21 +258,56 @@ export class PostService {
   }
 
   async deleteReply(replyId: string, userId: string) {
-    const reply = await this.replyRepo.findOne({ where: { id: replyId } });
-    if (!reply) throw new NotFoundException('Reply not found');
-    if (reply.userId !== userId) throw new ForbiddenException('Cannot delete others reply');
+    // Fetch only non-deleted replies
+    const reply = await this.replyRepo.findOne({
+      where: {
+        id: replyId,
+        deletedAt: IsNull(),
+      },
+    });
+
+    if (!reply) {
+      throw new NotFoundException('Reply not found');
+    }
+
+    if (reply.userId !== userId) {
+      throw new ForbiddenException('Cannot delete others reply');
+    }
 
     return this.dataSource.transaction(async (manager) => {
+      // Delete reply (soft or hard, depending on entity config)
       await manager.delete(PostReply, { id: replyId });
-      await manager.decrement(Post, { id: reply.postId }, 'replyCount', 1);
 
-      const post = await manager.findOne(Post, { where: { id: reply.postId } });
+      // Safe, atomic decrement (never below 0)
+      await manager
+        .createQueryBuilder()
+        .update(Post)
+        .set({
+          replyCount: () => `GREATEST(replyCount - 1, 0)`,
+        })
+        .where('id = :postId', { postId: reply.postId })
+        .execute();
+
+      // Fetch updated post for Redis sync
+      const post = await manager.findOne(Post, {
+        where: { id: reply.postId },
+        select: ['id', 'replyCount'],
+      });
+
       if (post) {
-        // ensure we don't set Redis for a null post
-        await this.redisService.set(`post:${reply.postId}:replyCount`, post.replyCount);
+        await this.redisService.set(
+          `post:${post.id}:replyCount`,
+          Math.max(post.replyCount, 0),
+        );
       }
 
-      await this.kafka.produce('post.reply.deleted', { postId: reply.postId, replyId, userId });
+      // Emit event after successful transaction logic
+      await this.kafka.produce('post.reply.deleted', {
+        postId: reply.postId,
+        replyId,
+        userId,
+      });
+
       return { replyDeleted: true };
     });
   }
@@ -227,6 +316,24 @@ export class PostService {
     const exists = await this.postRepo.exists({ where: { id: postId } });
     if (!exists) throw new NotFoundException('Post not found');
 
-    return this.replyRepo.find({ where: { postId }, order: { createdAt: 'ASC' } });
+    return this.replyRepo
+      .createQueryBuilder('reply')
+      .innerJoin('reply.user', 'user')
+      .where('reply.postId = :postId')
+      .andWhere('reply.deletedAt IS NULL')
+      .setParameter('postId', postId)
+      .select([
+        'reply.id',
+        'reply.userId',
+        'reply.content',
+        'reply.mediaItems',
+        'reply.mentions',
+        'reply.createdAt',
+        'reply.updatedAt',
+        'user.id',
+        'user.username',
+      ])
+      .orderBy('reply.createdAt', 'ASC')
+      .getMany();
   }
 }

@@ -14,12 +14,9 @@ export class UserReplicaService {
   ) { }
 
   async onUserCreated(data: UserCreatedDto) {
-    console.log("OnUserCreated: ", this.userReplicaRepo, data)
-    // console.log("User replica payload: ", data)
-    // const exists = await this.repo.findOne({ where: { id: data.id } });
-    // console.log(exists)
-    // if (exists) return;
-    // await this.repo.insert(data);
+    const exists = await this.userReplicaRepo.findOne({ where: { id: data.id } });
+    if (exists) return;
+    await this.userReplicaRepo.insert(data);
   }
 
   async onUserUpdated(data: UserUpdatedDto) {

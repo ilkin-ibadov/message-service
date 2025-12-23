@@ -123,7 +123,7 @@ export class PostController {
     return this.postService.reply(id, req.user.sub, dto)
   }
 
-  @Delete(":id/reply/delete")
+  @Delete(":replyId/reply/delete")
   @ApiOperation({ summary: 'Delete a reply' })
   @ApiOkResponse({ description: 'Reply successfully deleted' })
   @ApiNotFoundResponse({ description: 'Post not found' })
