@@ -45,6 +45,16 @@ export class PostService {
     };
   }
 
+  private async hydrateAndCachePosts(posts: Post[]) {
+    return Promise.all(
+      posts.map(async (post) => {
+        await this.redisService.set(`post:${post.id}`, post, 3600);
+        return this.hydratePostCounters(post);
+      }),
+    );
+  }
+
+
   async resolveMentionsLocally(usernames: string[]) {
     const users = await this.userReplicaService.findManyByUsername(usernames);
     return users.map((user) => user.id);
@@ -137,6 +147,93 @@ export class PostService {
         total,
         page,
         lastPage: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findMyPosts(userId: string, page = 1, limit = 10) {
+    const cacheKey = `myPosts:${userId}:page:${page}:limit:${limit}`;
+    const cachedIds = await this.redisService.get(cacheKey);
+
+    let posts: Post[];
+    let total: number;
+
+    if (cachedIds) {
+      posts = await Promise.all(
+        cachedIds.map((id: string) => this.findById(id)),
+      );
+      total = await this.postRepo.count({ where: { userId } });
+    } else {
+      const skip = (page - 1) * limit;
+
+      const result = await this.postRepo.findAndCount({
+        where: { userId },
+        order: { createdAt: 'DESC' },
+        skip,
+        take: limit,
+      });
+
+      posts = result[0];
+      total = result[1];
+
+      await this.redisService.set(
+        cacheKey,
+        posts.map((p) => p.id),
+        300,
+      );
+    }
+
+    const hydrated = await this.hydrateAndCachePosts(posts);
+
+    return {
+      data: hydrated,
+      meta: {
+        total,
+        page,
+        lastPage: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async feed(userId: string, page = 1, limit = 10) {
+    const cacheKey = `feed:${userId}:page:${page}:limit:${limit}`;
+    const cachedIds = await this.redisService.get(cacheKey);
+
+    let posts: Post[];
+
+    if (cachedIds) {
+      posts = await Promise.all(
+        cachedIds.map((id: string) => this.findById(id)),
+      );
+    } else {
+      const offset = (page - 1) * limit;
+
+      posts = await this.postRepo
+        .createQueryBuilder('post')
+        .distinctOn(['post.userId'])
+        .where('post.userId != :userId', { userId })
+        .andWhere('post.deletedAt IS NULL')
+        .orderBy('post.userId')
+        .addOrderBy('post.createdAt', 'DESC')
+        .offset(offset)
+        .limit(limit)
+        .getMany();
+
+      await this.redisService.set(
+        cacheKey,
+        posts.map((p) => p.id),
+        300,
+      );
+    }
+
+    const hydrated = await this.hydrateAndCachePosts(posts);
+
+    return {
+      data: hydrated,
+      meta: {
+        page,
+        limit,
+        hasMore: hydrated.length === limit,
       },
     };
   }

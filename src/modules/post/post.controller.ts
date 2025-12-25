@@ -70,6 +70,45 @@ export class PostController {
     return this.postService.findAll(pageNum, limitNum);
   }
 
+  @Get('me')
+  @ApiOperation({
+    summary: 'Get my posts',
+    description: 'Returns paginated posts created by the authenticated user.',
+  })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiResponse({
+    status: 200,
+    description: 'User posts fetched successfully',
+  })
+  getMyPosts(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10
+  ) {
+    return this.postService.findMyPosts(req.user.sub, page, limit);
+  }
+
+  @Get('feed')
+  @ApiOperation({
+    summary: 'Get feed',
+    description:
+      'Returns a mixed feed with at most one post per user, excluding the authenticated user’s posts.',
+  })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiResponse({
+    status: 200,
+    description: 'Feed fetched successfully',
+  })
+  async getFeed(
+    @Req() req: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10
+  ) {
+    return this.postService.feed(req.user.sub, page, limit);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update a post' })
   @ApiOkResponse({
