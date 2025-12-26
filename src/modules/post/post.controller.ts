@@ -70,7 +70,7 @@ export class PostController {
     return this.postService.findAll(pageNum, limitNum);
   }
 
-  @Get('me')
+  @Get('user/me')
   @ApiOperation({
     summary: 'Get my posts',
     description: 'Returns paginated posts created by the authenticated user.',
@@ -89,7 +89,7 @@ export class PostController {
     return this.postService.findMyPosts(req.user.sub, page, limit);
   }
 
-  @Get('feed')
+  @Get('feed/main')
   @ApiOperation({
     summary: 'Get feed',
     description:

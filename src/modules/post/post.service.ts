@@ -54,7 +54,6 @@ export class PostService {
     );
   }
 
-
   async resolveMentionsLocally(usernames: string[]) {
     const users = await this.userReplicaService.findManyByUsername(usernames);
     return users.map((user) => user.id);
@@ -160,7 +159,7 @@ export class PostService {
 
     if (cachedIds) {
       posts = await Promise.all(
-        cachedIds.map((id: string) => this.findById(id)),
+        cachedIds.map((id) => this.findById(id)),
       );
       total = await this.postRepo.count({ where: { userId } });
     } else {
@@ -172,6 +171,8 @@ export class PostService {
         skip,
         take: limit,
       });
+
+      console.log("Query Result: ", result)
 
       posts = result[0];
       total = result[1];
@@ -203,7 +204,7 @@ export class PostService {
 
     if (cachedIds) {
       posts = await Promise.all(
-        cachedIds.map((id: string) => this.findById(id)),
+        cachedIds.map((id) => this.findById(id)),
       );
     } else {
       const offset = (page - 1) * limit;
