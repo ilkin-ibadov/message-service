@@ -1,5 +1,5 @@
 {
-  "name": "post-service",
+  "name": "message-service",
   "version": "0.0.1",
   "description": "",
   "author": "",
@@ -27,8 +27,10 @@
     "@nestjs/mongoose": "^11.0.3",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-socket.io": "^11.1.10",
     "@nestjs/swagger": "^11.2.3",
     "@nestjs/typeorm": "^11.0.0",
+    "@nestjs/websockets": "^11.1.10",
     "aws-sdk": "^2.1361.0",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
@@ -46,6 +48,7 @@
     "pg": "8.10.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "socket.io": "^4.8.3",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.17",
     "uuid": "^9.0.0"

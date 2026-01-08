@@ -14,14 +14,14 @@ async function bootstrap() {
   }))
 
   const config = new DocumentBuilder()
-    .setTitle("Post service API")
-    .setDescription("API documentation for the Post microservice")
+    .setTitle("Message service API")
+    .setDescription("API documentation for the Message microservice")
     .setVersion("1.0")
     .addBearerAuth()
     .build()
 
   const document = SwaggerModule.createDocument(app, config)
-  SwaggerModule.setup("docs/posts", app, document)
+  SwaggerModule.setup("docs/messages", app, document)
 
   app.enableCors()
 

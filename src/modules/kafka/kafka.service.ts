@@ -1,33 +1,73 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
-import { Kafka, Producer, Consumer } from 'kafkajs';
-import * as crypto from 'crypto';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common'
+import { Kafka, Producer, Consumer } from 'kafkajs'
 
 interface KafkaHandler {
-  topic: string;
-  callback: (payload: any) => Promise<void>;
+  topic: string
+  groupId: string
+  handler: (payload: any) => Promise<void>
 }
 
-const topic = 'auth.user.created'
-
 @Injectable()
-export class KafkaService implements OnModuleInit {
-  private producer: Producer;
-  private consumer: Consumer;
-  private handlers: KafkaHandler[] = [];
+export class KafkaService implements OnModuleInit, OnModuleDestroy {
+  private kafka: Kafka
+  private producer: Producer
+  private consumers: Consumer[] = []
 
-  constructor(@Inject('KAFKA') private readonly kafka: Kafka) { }
+  constructor() {
+    this.kafka = new Kafka({
+      clientId: process.env.KAFKA_CLIENT_ID || 'message-service',
+      brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+    })
 
-  /** Initialize producer and consumer */
+    this.producer = this.kafka.producer()
+
+    this.consumer = this.kafka.consumer({ groupId: 'message-service-group' });
+  }
+
   async onModuleInit() {
-    // Producer
-    this.producer = this.kafka.producer();
-    await this.producer.connect();
-    console.log('Post: Kafka producer connected');
+    await this.producer.connect()
+    console.log('Message: Kafka producer connected');
 
-    // Consumer
-    this.consumer = this.kafka.consumer({ groupId: 'posts-service-group' });
     await this.consumer.connect();
-    console.log('Post: Kafka consumer connected');
+    console.log('Message: Kafka consumer connected');
+  }
+
+  async onModuleDestroy() {
+    await this.producer.disconnect()
+    for (const consumer of this.consumers) {
+      await consumer.disconnect()
+    }
+  }
+
+  // PRODUCER
+  async emit(topic: string, payload: any): Promise<void> {
+    await this.producer.send({
+      topic,
+      messages: [
+        {
+          value: JSON.stringify(payload),
+        },
+      ],
+    })
+  }
+
+  //CONSUMER
+  async subscribe({ topic, groupId, handler }: KafkaHandler) {
+    const consumer = this.kafka.consumer({ groupId })
+
+    await consumer.connect()
+    await consumer.subscribe({ topic, fromBeginning: false })
+
+    await consumer.run({
+      eachMessage: async ({ message }) => {
+        if (!message.value) return
+
+        const payload = JSON.parse(message.value.toString())
+        await handler(payload)
+      },
+    })
+
+    this.consumers.push(consumer)
   }
 
   async startConsumer() {
@@ -57,29 +97,8 @@ export class KafkaService implements OnModuleInit {
     });
   }
 
-  /** Register a topic handler before consumer runs */
   registerHandler(topic: string, callback: (payload: any) => Promise<void>) {
     console.log("Post: Kafka register handler called", topic, callback)
     this.handlers.push({ topic, callback });
-  }
-
-  /** PRODUCER: Send message */
-  async produce(topic: string, message: Record<string, any>) {
-    try {
-      await this.producer.send({
-        topic,
-        messages: [
-          {
-            value: JSON.stringify({
-              ...message,
-              eventId: crypto.randomUUID(),
-              occurredAt: new Date(),
-            }),
-          },
-        ],
-      });
-    } catch (error) {
-      console.error('Post: Kafka produce error', error);
-    }
   }
 }

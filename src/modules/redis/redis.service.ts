@@ -1,42 +1,32 @@
-import { Inject, Injectable } from '@nestjs/common';
-import Redis from 'ioredis';
+import { Inject, Injectable } from '@nestjs/common'
+import Redis from 'ioredis'
 
 @Injectable()
 export class RedisService {
-    constructor(@Inject('REDIS') private readonly redis: Redis) {}
+    constructor(@Inject('REDIS') private readonly client: Redis) { }
 
-    async get(key: string) {
-        const data = await this.redis.get(key);
-        return data ? JSON.parse(data) : null;
+    // Set user online
+    async setUserOnline(userId: string): Promise<void> {
+        await this.client.set(`user:online:${userId}`, '1')
     }
 
-    async set(key: string, value: any, ttlSeconds?: number) {
-        const stringValue = JSON.stringify(value);
-        if (ttlSeconds) {
-            await this.redis.set(key, stringValue, 'EX', ttlSeconds);
-        } else {
-            await this.redis.set(key, stringValue);
-        }
+    // Set user offline
+    async setUserOffline(userId: string): Promise<void> {
+        await this.client.del(`user:online:${userId}`)
     }
 
-    async lpush(key: string, value: any) {
-        await this.redis.lpush(key, JSON.stringify(value));
+    // Check if user is online
+    async isUserOnline(userId: string): Promise<boolean> {
+        const res = await this.client.get(`user:online:${userId}`)
+        return res === '1'
     }
 
-    async rpop(key: string) {
-        const val = await this.redis.rpop(key);
-        return val ? JSON.parse(val) : null;
+    // Optional: store socket ID for user
+    async setUserSocket(userId: string, socketId: string): Promise<void> {
+        await this.client.set(`user:socket:${userId}`, socketId)
     }
 
-    async incr(key: string) {
-        return this.redis.incr(key);
-    }
-
-    async decr(key: string) {
-        return this.redis.decr(key);
-    }
-
-    async del(key: string) {
-        return this.redis.del(key);
+    async getUserSocket(userId: string): Promise<string | null> {
+        return this.client.get(`user:socket:${userId}`)
     }
 }
